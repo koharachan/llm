@@ -1,6 +1,6 @@
 # LeviLamina
 
-![LeviLamina](https://socialify.git.ci/LiteLDev/LeviLamina/image?description=1&font=Raleway&forks=1&issues=1&logo=https%3A%2F%2Fraw.githubusercontent.com%2FLiteLDev%2FLeviLamina%2FHEAD%2Fdocs%2Fmain%2Flogo.svg&name=1&owner=1&pattern=Circuit%20Board&pulls=1&stargazers=1&theme=Auto)
+![LeviLamina](https://socialify.git.ci/koharachan/llm/image?description=1&font=Raleway&forks=1&issues=1&logo=https%3A%2F%2Fraw.githubusercontent.com%2FLiteLDev%2FLeviLamina%2FHEAD%2Fdocs%2Fmain%2Flogo.svg&name=1&owner=1&pattern=Circuit%20Board&pulls=1&stargazers=1&theme=Auto)
 
 [![Discord](https://img.shields.io/discord/849252980430864384?style=for-the-badge&logo=discord)](https://discord.gg/v5R5P4vRZk)
 [![Telegram](https://img.shields.io/badge/Telegram-blue?style=for-the-badge&logo=telegram)](https://t.me/LiteLoader)
@@ -47,7 +47,7 @@ LeviLamina follows the [Contributor Covenant](https://www.contributor-covenant.o
 
 This project exists thanks to all the people who contribute.
 
-![Contributors](https://contrib.rocks/image?repo=LiteLDev/LeviLamina)
+![Contributors](https://contrib.rocks/image?repo=koharachan/llm)
 
 ## License
 
