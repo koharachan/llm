@@ -31,7 +31,7 @@ Please refer to [Quickstart](https://lamina.levimc.org/quickstart/)
 
 ## Star History
 
-![Star History Chart](https://api.star-history.com/svg?repos=LiteLDev/LeviLamina&type=Date)
+![Star History Chart](https://api.star-history.com/svg?repos=koharachan/llm&type=Date)
 
 ## Acknowledgements
 
@@ -39,7 +39,7 @@ We sincerely thank [all donors](https://5g8svn.sharepoint.com/:x:/s/LiteLDev/EXx
 
 ## Contributing
 
-Feel free to dive in! [Open an issue](https://github.com/LiteLDev/LeviLamina/issues/new/choose) or submit pull requests (PRs).
+Feel free to dive in! [Open an issue](https://github.com/koharachan/llm/issues/new/choose) or submit pull requests (PRs).
 
 LeviLamina follows the [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/) Code of Conduct.
 
