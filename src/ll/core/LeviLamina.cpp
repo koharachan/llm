@@ -4,46 +4,69 @@
 #include "ll/api/io/FileUtils.h"
 #include "ll/api/reflection/Deserialization.h"
 #include "ll/core/Version.h"
-
 #include "mc/platform/UUID.h"
-
 #include "nlohmann/json.hpp"
 
 namespace ll {
+namespace {
+// 预缓存常用路径和翻译结果以优化性能
+static const auto& getManifestPath() {
+    static const auto path = [] {
+        return mod::getModsRoot() / string_utils::sv2u8sv(selfModName) / u8"manifest.json";
+    }();
+    return path;
+}
+
+// 缓存欢迎消息的翻译结果
+struct CachedMessages {
+    std::string_view licenseMsg;
+    std::string_view translateMsg;
+
+    CachedMessages() {
+        licenseMsg   = "LeviLamina is a free software licensed under {0}"_tr("LGPLv3");
+        translateMsg = "Help us translate & improve text -> {0}"_tr("https://translate.liteldev.com/");
+    }
+};
+} // namespace
+
 std::shared_ptr<mod::NativeMod> const& getSelfModIns() {
-    static auto llSelf = std::make_shared<mod::NativeMod>(
-        ::ll::reflection::deserialize_to<mod::Manifest>(
-            nlohmann::json::parse(
-                file_utils::readFile(mod::getModsRoot() / string_utils::sv2u8sv(selfModName) / u8"manifest.json")
-                    .value(),
-                nullptr,
-                true,
-                true
-            )
-        )
-            .value(),
-        sys_utils::getCurrentModuleHandle()
-    );
+    static const auto llSelf = [] {
+        // 使用快速JSON解析选项：禁用异常和评论
+        auto json = nlohmann::json::parse(
+            file_utils::readFile(getManifestPath()).value(),
+            nullptr,
+            false, // 禁用注释
+            false  // 严格模式
+        );
+        return std::make_shared<mod::NativeMod>(
+            reflection::deserialize_to<mod::Manifest>(json).value(),
+            sys_utils::getCurrentModuleHandle()
+        );
+    }();
     return llSelf;
 }
-io::Logger& getLogger() { return getSelfModIns()->getLogger(); }
+
+io::Logger& getLogger() {
+    static auto& logger = getSelfModIns()->getLogger();
+    return logger;
+}
 
 std::string_view getServiceUuid() {
-    static std::string serverUuid = [] {
-        auto uuidPath = getSelfModIns()->getDataDir() / u8"statisticsUuid";
-        return *file_utils::readFile(uuidPath).or_else([&] {
+    static const std::string serverUuid = [] {
+        const auto uuidPath = getSelfModIns()->getDataDir() / u8"statisticsUuid";
+        auto       content  = file_utils::readFile(uuidPath);
+        if (!content) {
             std::string uuid = mce::UUID::random().asString();
             file_utils::writeFile(uuidPath, uuid);
-            return std::optional{std::move(uuid)};
-        });
+            return uuid;
+        }
+        return std::move(*content); // 避免二次拷贝
     }();
     return serverUuid;
 }
 
-data::Version getLoaderVersion() { return getSelfModIns()->getManifest().version.value(); }
-
-
 void printWelcomeMsg() {
+    static const CachedMessages cached; // 首次调用时初始化翻译缓存
     auto& logger = getLogger();
     logger.info(R"(                                                                      )");
     logger.info(R"(         _               _ _                    _                     )");

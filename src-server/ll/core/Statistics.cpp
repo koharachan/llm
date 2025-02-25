@@ -37,63 +37,57 @@
 namespace ll {
 
 static nlohmann::json addSimplePie(std::string_view key, std::variant<std::string, int> value) {
-    nlohmann::json json;
-    json["chartId"] = key;
-    nlohmann::json json2;
-    if (std::holds_alternative<std::string>(value)) {
-        json2["value"] = std::get<std::string>(std::move(value));
-    } else if (std::holds_alternative<int>(value)) {
-        json2["value"] = std::get<int>(std::move(value));
-    }
-    json["data"] = json2;
-    return json;
+    return {
+        {"chartId",                                                                              key},
+        {   "data", {{"value", std::visit([](auto&& arg) -> nlohmann::json { return arg; }, value)}}}
+    };
 }
 
-static nlohmann::json addAdvancedPie(std::string_view key, SmallDenseMap<std::string_view, int> const& value) {
-    nlohmann::json json;
-    json["chartId"] = key;
-    nlohmann::json json2;
+static nlohmann::json addAdvancedPie(std::string_view key, const SmallDenseMap<std::string_view, int>& value) {
     nlohmann::json valuesBuilder;
-    for (auto [string, integer] : value) {
-        valuesBuilder[string] = integer;
+    for (const auto& [k, v] : value) {
+        valuesBuilder[std::string(k)] = v; // 显式转换string_view->string
     }
-    json2["values"] = valuesBuilder;
-    json["data"]    = json2;
-    return json;
+    return {
+        {"chartId",                                    key},
+        {   "data", {{"values", std::move(valuesBuilder)}}}
+    };
 }
 
-static nlohmann::json addSingleLineChart(std::string_view key, const int value) {
-    nlohmann::json json;
-    json["chartId"] = key;
-    nlohmann::json json2;
-    json2["value"] = value;
-    json["data"]   = json2;
-    return json;
+static nlohmann::json addSingleLineChart(std::string_view key, int value) {
+    return {
+        {"chartId",                key},
+        {   "data", {{"value", value}}}
+    };
 }
 
 static nlohmann::json getCustomCharts() {
     nlohmann::json res;
+    res.reserve(5); // 预分配已知数量
+
+    const auto& buildInfo   = Common::getBuildInfo();
+    const auto  levelOpt    = service::getLevel();
+    const auto  settingsOpt = service::getPropertiesSettings();
+
+    // 基础信息
     res.emplace_back(addSimplePie("levilamina_version", getLoaderVersion().to_string()));
-    res.emplace_back(addSimplePie("minecraft_version", Common::getBuildInfo().mBuildId));
-    res.emplace_back(addSingleLineChart(
-        "players",
-        service::getLevel().transform([](auto& level) { return level.getActivePlayerCount(); }).value_or(0)
-    ));
-    res.emplace_back(
-        addSimplePie("online_mode", service::getPropertiesSettings().value().mIsOnlineMode ? "true" : "false")
-    );
+    res.emplace_back(addSimplePie("minecraft_version", buildInfo.mBuildId));
+
+    // 玩家数量
+    const int playerCount = levelOpt.transform([](auto& l) { return l.getActivePlayerCount(); }).value_or(0);
+    res.emplace_back(addSingleLineChart("players", playerCount));
+
+    // 在线模式
+    const bool onlineMode = settingsOpt.transform([](auto& s) { return s.mIsOnlineMode; }).value_or(false);
+    res.emplace_back(addSimplePie("online_mode", onlineMode ? "true" : "false"));
+
+    // 玩家平台统计
     SmallDenseMap<std::string_view, int> platforms;
-    service::getLevel().transform([&platforms](auto& level) {
+    levelOpt.transform([&platforms](auto& level) {
         level.forEachPlayer([&platforms](Player& player) {
-            std::string_view platformName = magic_enum::enum_name(player.mBuildPlatform);
-            if (platforms.find(platformName) == platforms.end()) {
-                platforms.emplace(platformName, 1);
-            } else {
-                platforms[platformName] += 1;
-            }
+            ++platforms[magic_enum::enum_name(player.mBuildPlatform)];
             return true;
         });
-        return true;
     });
     res.emplace_back(addAdvancedPie("player_platform", platforms));
 
@@ -108,16 +102,19 @@ struct Statistics::Impl {
             nlohmann::json pluginInfo;
             pluginInfo["pluginName"]   = getSelfModIns()->getName();
             pluginInfo["customCharts"] = getCustomCharts();
-            json["plugins"].emplace_back(pluginInfo);
+
+            // 直接替换plugins数组
+            json["plugins"] = nlohmann::json::array({pluginInfo});
+
             co_return;
         }).syncLaunch(thread::ServerThreadExecutor::getDefault());
+
         try {
-            auto body = json.dump();
             cpr::Post(
                 cpr::Url{
                     "https://bstats.org/submitData/server-implementation"
             },
-                cpr::Body{body},
+                cpr::Body{json.dump()},
                 cpr::Header{
                     {"Accept", "application/json"},
                     {"Content-Type", "application/json"},

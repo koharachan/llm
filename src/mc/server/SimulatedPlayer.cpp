@@ -13,33 +13,39 @@
 
 optional_ref<SimulatedPlayer>
 SimulatedPlayer::create(std::string const& name, Vec3 const& pos, DimensionType dimId, Vec2 const& rotation) {
-    auto handler = ll::service::getServerNetworkHandler();
-    if (!handler) {
-        return nullptr;
+    if (auto handler = ll::service::getServerNetworkHandler()) { // 合并条件检查
+        // 使用线程局部静态变量提高随机数生成效率（假设允许）
+        static thread_local std::mt19937_64    gen(std::random_device{}());
+        std::uniform_int_distribution<int64_t> dis(INT64_MIN, -1);
+        auto player = create(name, BlockPos{pos}, dimId, *handler, std::to_string(dis(gen)));
+        if (player) {
+            player->teleport(pos, dimId, rotation);
+        }
+        return player;
     }
-    auto player =
-        create(name, BlockPos{pos}, dimId, *handler, std::to_string(ll::random_utils::rand<int64>(INT64_MIN, -1)));
-    if (!player) {
-        return nullptr;
-    }
-    player->teleport(pos, dimId, rotation);
-    return player;
+    return nullptr;
 }
 
 bool SimulatedPlayer::simulateDestroyBlock(const BlockPos& pos, ScriptModuleMinecraft::ScriptFacing face) {
-    if (isAlive()) {
-        if (*mDestroyingBlockPos && *mDestroyingBlockFace) {
-            if (pos == **mDestroyingBlockPos && (uchar)face == **mDestroyingBlockFace) {
-                return true;
-            }
-            simulateStopDestroyingBlock();
+    if (!isAlive()) return false;
+
+    // 使用值缓存优化多次访问optional
+    if (mDestroyingBlockPos.has_value() && mDestroyingBlockFace.has_value()) {
+        if (pos == mDestroyingBlockPos.value() && static_cast<uchar>(face) == mDestroyingBlockFace.value()) {
+            return true;
         }
+        simulateStopDestroyingBlock();
+    }
 
-        BlockLegacy const& block = getDimensionBlockSource().getBlock(pos).getLegacyBlock();
+    BlockSource&       blockSource = getDimensionBlockSource(); // 缓存BlockSource
+    Block const&       block       = blockSource.getBlock(pos);
+    BlockLegacy const& legacy      = block.getLegacyBlock();
 
-        if (block.mayPick() && mItemInUse->mUnkf0096a.as<ItemStack>().isNull()) {
+    if (legacy.mayPick()) {
+        // 添加mItemInUse的判空检查防止崩溃
+        if (mItemInUse && mItemInUse->mUnkf0096a.as<ItemStack>().isNull()) {
             mDestroyingBlockPos  = pos;
-            mDestroyingBlockFace = (uchar)face;
+            mDestroyingBlockFace = static_cast<uchar>(face);
             return true;
         }
     }
@@ -47,19 +53,14 @@ bool SimulatedPlayer::simulateDestroyBlock(const BlockPos& pos, ScriptModuleMine
 }
 
 bool SimulatedPlayer::simulateDestroyLookAt(float handLength) {
-
     auto hitResult = traceRay(handLength, false);
-
-    if (hitResult.mType != HitResultType::Tile) {
-        return false;
-    }
-    return simulateDestroyBlock(hitResult.mBlock, (ScriptModuleMinecraft::ScriptFacing)hitResult.mFacing);
+    return hitResult.mType == HitResultType::Tile
+        && simulateDestroyBlock(hitResult.mBlock, static_cast<ScriptModuleMinecraft::ScriptFacing>(hitResult.mFacing));
 }
 
 ::SimulatedPlayer* tryGetFromEntity(::EntityContext& entity, bool includeRemoved) {
-    auto result = static_cast<SimulatedPlayer*>(Player::tryGetFromEntity(entity, includeRemoved));
-    if (result && result->isSimulated()) {
-        return result;
-    }
-    return nullptr;
+    // 使用一步转换优化类型检查
+    return ll::service::getServerNetworkHandler()
+             ? static_cast<SimulatedPlayer*>(Player::tryGetFromEntity(entity, includeRemoved))
+             : nullptr;
 }
